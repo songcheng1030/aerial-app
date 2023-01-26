@@ -1,0 +1,33 @@
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isValidUser(request) {
+      return request.auth != null &&
+        request.auth.token.email_verified
+    }
+
+    function isAerialEmail(request) {
+      return isValidUser(request) &&
+        request.auth.token.email.matches('.*@aerialops.io$')
+    }
+
+    function isOrgAdmin(orgId, request) {
+      return isValidUser(request) &&
+        (get(/databases/$(database)/documents/org/$(orgId)/role/$(request.auth.uid)).data.admin == true)
+    }
+
+    function isOrgMember(orgId, request) {
+      return isValidUser(request) &&
+        exists(/databases/$(database)/documents/org/$(orgId)/role/$(request.auth.uid))
+    }
+
+    function isOwnRole(userId, request) {
+      return isValidUser(request) &&
+        request.auth.uid == userId
+    }
+
+    match /org/{orgId}/role/{userId} {
+      allow write: if isAerialEmail(request) || isOrgAdmin(orgId, request)
+      allow read: if isAerialEmail(request) || isOrgAdmin(orgId, request) || isOwnRole(userId, request)
+    }
+  }
+}
